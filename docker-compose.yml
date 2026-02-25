@@ -12,7 +12,7 @@ services:
       - SUPABASE_KEY=${SUPABASE_KEY}
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - BACKEND_CORS_ORIGINS=["http://localhost:3000", "https://pandora.vercel.app"]
+      - CORS_ORIGINS=http://localhost:3000,https://pandora-ai-frontend.vercel.app,https://pandora-ai.vercel.app,https://pandora.vercel.app
 
   weaviate:
     command:

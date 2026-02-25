@@ -5,8 +5,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "PANDORA API"
     API_V1_STR: str = "/api/v1"
     
-    # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    # CORS (Comma separated list of allowed origins)
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://pandora-ai-frontend.vercel.app,https://pandora-ai.vercel.app,https://pandora.vercel.app"
     
     # Supabase (Loaded from .env)
     SUPABASE_URL: str = ""
