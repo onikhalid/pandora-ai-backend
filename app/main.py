@@ -71,7 +71,7 @@ def test_weaviate_connection():
         scheme = "https" if url.startswith("https") else "http"
         host_port = url.replace(f"{scheme}://", "").split(":")
         host = host_port[0].strip('/')
-        port = int(host_port[1].strip('/')) if len(host_port) > 1 else (443 if scheme == "https" else 80)
+        port = int(host_port[1].strip('/')) if len(host_port) > 1 else (443 if scheme == "https" else 8080)
         grpc_host = os.environ.get("WEAVIATE_GRPC_HOST", host)
         grpc_port = int(os.environ.get("WEAVIATE_GRPC_PORT", 50051))
         
@@ -89,7 +89,7 @@ def test_weaviate_connection():
         scheme = "https" if url.startswith("https") else "http"
         host_port = url.replace(f"{scheme}://", "").split(":")
         host = host_port[0].strip('/')
-        port = int(host_port[1].strip('/')) if len(host_port) > 1 else (443 if scheme == "https" else 80)
+        port = int(host_port[1].strip('/')) if len(host_port) > 1 else (443 if scheme == "https" else 8080)
         grpc_host = os.environ.get("WEAVIATE_GRPC_HOST", host)
         grpc_port = int(os.environ.get("WEAVIATE_GRPC_PORT", 50051))
         return {
