@@ -10,16 +10,24 @@ def get_weaviate_client():
     url = settings.WEAVIATE_URL
     scheme = "https" if url.startswith("https") else "http"
     host_port = url.replace(f"{scheme}://", "").split(":")
-    host = host_port[0]
-    port = int(host_port[1]) if len(host_port) > 1 else (443 if scheme == "https" else 80)
+    host = host_port[0].strip('/')
+    port = int(host_port[1].strip('/')) if len(host_port) > 1 else (443 if scheme == "https" else 80)
+    
+    # Check for explicit GRPC variables (e.g. if routing via a public proxy)
+    import os
+    grpc_host = os.environ.get("WEAVIATE_GRPC_HOST", host)
+    grpc_port = int(os.environ.get("WEAVIATE_GRPC_PORT", 50051))
+    
+    print(f"Connecting to Weaviate -> HTTP: {scheme}://{host}:{port} | GRPC: {grpc_host}:{grpc_port}")
     
     client = weaviate.connect_to_custom(
         http_host=host,
         http_port=port,
         http_secure=(scheme == "https"),
-        grpc_host=host,
-        grpc_port=50051,
-        grpc_secure=False
+        grpc_host=grpc_host,
+        grpc_port=grpc_port,
+        grpc_secure=(scheme == "https" and os.environ.get("WEAVIATE_GRPC_SECURE", "false").lower() == "true"),
+        skip_init_checks=True
     )
     return client
 
