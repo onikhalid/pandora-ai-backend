@@ -1,7 +1,8 @@
 from typing import List, Dict
 from app.db.weaviate import get_weaviate_client
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from app.core.config import settings
 class GraphRAGService:
     @staticmethod
     def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[str]:
@@ -25,8 +26,12 @@ class GraphRAGService:
             nodes_collection = client.collections.get("DocumentNode")
             chunks = GraphRAGService.chunk_text(content)
             
+            # Compute embeddings natively in Python using Google GenAI
+            embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=settings.GOOGLE_API_KEY)
+            vectors = embeddings.embed_documents(chunks)
+            
             with nodes_collection.batch.dynamic() as batch:
-                for chunk in chunks:
+                for i, chunk in enumerate(chunks):
                     batch.add_object(
                         properties={
                             "content": chunk,
@@ -36,7 +41,8 @@ class GraphRAGService:
                             "external_id": external_id,
                             "created_at": created_at,
                             "domain_id": domain_id
-                        }
+                        },
+                        vector=vectors[i]
                     )
             
             if len(nodes_collection.batch.failed_objects) > 0:
@@ -80,8 +86,13 @@ class GraphRAGService:
             if domain_id:
                 combined_filter = combined_filter & wvc.query.Filter.by_property("domain_id").equal(domain_id)
 
-            response = nodes_collection.query.near_text(
-                query=query,
+            # Compute the search vector using Google GenAI
+            embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=settings.GOOGLE_API_KEY)
+            query_vector = embeddings.embed_query(query)
+
+            # Use near_vector because the text2vec-transformers module is removed
+            response = nodes_collection.query.near_vector(
+                near_vector=query_vector,
                 limit=limit,
                 filters=combined_filter
             )
