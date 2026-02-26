@@ -27,6 +27,9 @@ def get_weaviate_client():
         grpc_host=grpc_host,
         grpc_port=grpc_port,
         grpc_secure=(scheme == "https" and os.environ.get("WEAVIATE_GRPC_SECURE", "false").lower() == "true"),
+        headers={
+            "X-Goog-Api-Key": os.environ.get("GOOGLE_API_KEY")
+        },
         skip_init_checks=True
     )
     return client
@@ -60,6 +63,7 @@ def init_weaviate_schema():
            vectorizer_config=wvc.config.Configure.Vectorizer.text2vec_google(
                 model_id="gemini-embedding-001",
                 api_endpoint="generativelanguage.googleapis.com",
+                project_id="studio-placeholder"
             )
             
         )
