@@ -56,7 +56,10 @@ def init_weaviate_schema():
             # Need to index null states to allow filtering by is_none() for sandbox docs
             inverted_index_config=wvc.config.Configure.inverted_index(index_null_state=True),
             # Using external embeddings (Google GenAI) computed in Python, so Weaviate is just a vector store
-            vectorizer_config=wvc.config.Configure.Vectorizer.none()
+            # vectorizer_config=wvc.config.Configure.Vectorizer.none()
+            vectorizer_config=wvc.config.Configure.Vectorizer.text2vec_google(
+                model_id="gemini-embedding-001",
+            )
         )
         print("DocumentNode collection created.")
             

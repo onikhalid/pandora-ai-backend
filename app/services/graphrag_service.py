@@ -27,7 +27,7 @@ class GraphRAGService:
             chunks = GraphRAGService.chunk_text(content)
             
             # Compute embeddings natively in Python using Google GenAI
-            embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=settings.GOOGLE_API_KEY)
+            embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", google_api_key=settings.GOOGLE_API_KEY)
             vectors = embeddings.embed_documents(chunks)
             
             with nodes_collection.batch.dynamic() as batch:
@@ -87,7 +87,7 @@ class GraphRAGService:
                 combined_filter = combined_filter & wvc.query.Filter.by_property("domain_id").equal(domain_id)
 
             # Compute the search vector using Google GenAI
-            embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=settings.GOOGLE_API_KEY)
+            embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", google_api_key=settings.GOOGLE_API_KEY)
             query_vector = embeddings.embed_query(query)
 
             # Use near_vector because the text2vec-transformers module is removed
