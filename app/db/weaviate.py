@@ -5,11 +5,21 @@ from app.core.config import settings
 def get_weaviate_client():
     """
     Returns a configured Weaviate Python Client (v4).
-    Connects to the local running Docker container by default.
+    Connects to the WEAVIATE_URL defined in settings.
     """
-    client = weaviate.connect_to_local(
-        host="localhost",
-        port=8080,
+    url = settings.WEAVIATE_URL
+    scheme = "https" if url.startswith("https") else "http"
+    host_port = url.replace(f"{scheme}://", "").split(":")
+    host = host_port[0]
+    port = int(host_port[1]) if len(host_port) > 1 else (443 if scheme == "https" else 80)
+    
+    client = weaviate.connect_to_custom(
+        http_host=host,
+        http_port=port,
+        http_secure=(scheme == "https"),
+        grpc_host=host,
+        grpc_port=50051,
+        grpc_secure=False
     )
     return client
 
