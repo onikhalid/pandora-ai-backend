@@ -58,6 +58,48 @@ app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", ta
 app.include_router(search.router, prefix=f"{settings.API_V1_STR}/search", tags=["search"])
 app.include_router(collaborators.router, prefix=f"{settings.API_V1_STR}/documents", tags=["collaborators"])
 
+@app.get(f"{settings.API_V1_STR}/test_weaviate")
+def test_weaviate_connection():
+    from app.db.weaviate import get_weaviate_client
+    import os
+    try:
+        client = get_weaviate_client()
+        client.connect()
+        is_ready = client.is_ready()
+        
+        url = settings.WEAVIATE_URL
+        scheme = "https" if url.startswith("https") else "http"
+        host_port = url.replace(f"{scheme}://", "").split(":")
+        host = host_port[0].strip('/')
+        port = int(host_port[1].strip('/')) if len(host_port) > 1 else (443 if scheme == "https" else 80)
+        grpc_host = os.environ.get("WEAVIATE_GRPC_HOST", host)
+        grpc_port = int(os.environ.get("WEAVIATE_GRPC_PORT", 50051))
+        
+        info = {
+            "status": "success" if is_ready else "not_ready",
+            "weaviate_url_env": settings.WEAVIATE_URL,
+            "parsed_http": f"{scheme}://{host}:{port}",
+            "parsed_grpc": f"{grpc_host}:{grpc_port}",
+            "grpc_secure": str(scheme == "https" and os.environ.get("WEAVIATE_GRPC_SECURE", "false").lower() == "true")
+        }
+        client.close()
+        return info
+    except Exception as e:
+        url = settings.WEAVIATE_URL
+        scheme = "https" if url.startswith("https") else "http"
+        host_port = url.replace(f"{scheme}://", "").split(":")
+        host = host_port[0].strip('/')
+        port = int(host_port[1].strip('/')) if len(host_port) > 1 else (443 if scheme == "https" else 80)
+        grpc_host = os.environ.get("WEAVIATE_GRPC_HOST", host)
+        grpc_port = int(os.environ.get("WEAVIATE_GRPC_PORT", 50051))
+        return {
+            "status": "error",
+            "error_type": str(type(e)),
+            "error_message": str(e),
+            "weaviate_url_env": settings.WEAVIATE_URL,
+            "parsed_http": f"{scheme}://{host}:{port}",
+            "parsed_grpc": f"{grpc_host}:{grpc_port}"
+        }
 @app.get("/")
 def health_check():
     return {"status": "ok", "app": settings.PROJECT_NAME}
