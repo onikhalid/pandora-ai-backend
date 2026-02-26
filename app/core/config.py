@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
 
-    # Weaviate
-    WEAVIATE_URL: str = "http://localhost:8080"
+    # Weaviate (Defaults to docker-compose service name)
+    WEAVIATE_URL: str = "http://weaviate:8080"
     
     # AI Secrets
     GOOGLE_API_KEY: str = ""
