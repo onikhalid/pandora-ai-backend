@@ -1,7 +1,9 @@
 version: '3.4'
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.railway
     ports:
       - 8000:8000
     depends_on:
