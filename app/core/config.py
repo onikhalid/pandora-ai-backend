@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # AI Secrets
     GOOGLE_API_KEY: str = ""
     
+    # ClickUp Integration
+    CLICKUP_CLIENT_ID: str = ""
+    CLICKUP_CLIENT_SECRET: str = ""
+    CLICKUP_REDIRECT_URI: str = "http://localhost:3000/integrations/clickup/callback"
+    
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()

@@ -261,3 +261,228 @@ CREATE POLICY "Super Admins can manage ALL documents" ON documents FOR ALL USING
 
 -- Note: In production, further granular policies on project_users, crds, and tickets follow the same pattern 
 -- checking 'auth.uid()' against the mapped foreign keys!
+
+-- ==========================================
+-- CLICKUP INTEGRATION & AI TASK AUGMENTATION
+-- ==========================================
+
+-- 1. ClickUp Workspace Connections
+CREATE TABLE IF NOT EXISTS clickup_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    access_token TEXT NOT NULL,
+    clickup_workspace_id TEXT, -- The workspace they connected to
+    clickup_workspace_name TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(organization_id)
+);
+
+ALTER TABLE clickup_connections ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins can manage ClickUp connection" ON clickup_connections FOR ALL USING (
+    organization_id = get_my_org_id() AND
+    get_user_org_role(organization_id) IN ('admin', 'super_admin')
+);
+CREATE POLICY "Members can view ClickUp connection details" ON clickup_connections FOR SELECT USING (
+    organization_id = get_my_org_id()
+);
+
+
+-- 2. RACI Task Augmentation (Pandora custom fields for ClickUp tasks)
+CREATE TABLE IF NOT EXISTS task_raci (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    clickup_task_id TEXT NOT NULL, -- Foreign Key to ClickUp
+    responsible_user_id UUID, -- auth.users.id — no FK since org_users has no unique(user_id)
+    accountable_user_id UUID, -- auth.users.id
+    consulted_user_ids UUID[] DEFAULT '{}',
+    informed_user_ids UUID[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(organization_id, clickup_task_id)
+);
+
+ALTER TABLE task_raci ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can view RACI for org tasks" ON task_raci FOR SELECT USING (
+    organization_id = get_my_org_id()
+);
+CREATE POLICY "Members can update RACI for org tasks" ON task_raci FOR ALL USING (
+    organization_id = get_my_org_id()
+);
+
+
+-- 3. Task Attachments (Pandora Supabase Buckets extension for ClickUp)
+CREATE TABLE IF NOT EXISTS task_attachments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    clickup_task_id TEXT NOT NULL, 
+    file_name TEXT NOT NULL,
+    file_url TEXT NOT NULL, -- URL to Supabase storage bucket
+    file_size_bytes BIGINT,
+    uploaded_by UUID, -- auth.users.id
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE task_attachments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can view and upload task attachments" ON task_attachments FOR ALL USING (
+    organization_id = get_my_org_id()
+);
+
+
+-- 4. AI Document Changelogs (Triggered from ClickUp task closures)
+CREATE TABLE IF NOT EXISTS task_changelog_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+    clickup_task_id TEXT NOT NULL, 
+    clickup_task_name TEXT NOT NULL,
+    clickup_task_url TEXT,
+    ai_summary TEXT NOT NULL, -- The Gemini-generated summary of what changed
+    closed_by UUID, -- auth.users.id
+    closed_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE task_changelog_entries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can view changelogs for org documents" ON task_changelog_entries FOR SELECT USING (
+    organization_id = get_my_org_id()
+);
+-- Backend API uses Service Role to insert changelogs via webhooks
+
+-- 5. Internal Tasks Mirror (for augmenting ClickUp)
+CREATE TABLE IF NOT EXISTS tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    clickup_task_id TEXT UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'OPEN',
+    pipeline_stage TEXT,
+    voice_input_url TEXT,
+    voice_transcript TEXT,
+    assigned_to UUID, -- auth.users.id
+    created_by UUID, -- auth.users.id
+    due_date TIMESTAMPTZ,
+    estimated_hours NUMERIC,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can view tasks in org" ON tasks FOR SELECT USING (
+    organization_id = get_my_org_id()
+);
+CREATE POLICY "Members can manage tasks in org" ON tasks FOR ALL USING (
+    organization_id = get_my_org_id()
+);
+
+-- 6. Time Logs
+CREATE TABLE IF NOT EXISTS time_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL, -- auth.users.id
+    hours NUMERIC NOT NULL,
+    description TEXT,
+    date DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE time_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can view time logs" ON time_logs FOR SELECT USING (
+    task_id IN (SELECT id FROM tasks WHERE organization_id = get_my_org_id())
+);
+CREATE POLICY "Members can manage their own time logs" ON time_logs FOR ALL USING (
+    user_id = auth.uid()
+);
+
+-- 7. Task Comments
+CREATE TABLE IF NOT EXISTS task_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+    clickup_comment_id TEXT,
+    user_id UUID, -- auth.users.id
+    comment TEXT NOT NULL,
+    audio_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE task_comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can view task comments" ON task_comments FOR SELECT USING (
+    task_id IN (SELECT id FROM tasks WHERE organization_id = get_my_org_id())
+);
+CREATE POLICY "Members can manage their own comments" ON task_comments FOR ALL USING (
+    user_id = auth.uid()
+);
+
+-- ==========================================
+-- AI ENGINE & INTELLIGENCE CORE
+-- ==========================================
+
+-- 1. AI Providers
+CREATE TABLE IF NOT EXISTS ai_providers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    name TEXT NOT NULL, -- 'gemini', 'claude', 'gpt-4'
+    is_active BOOLEAN DEFAULT true,
+    api_key_encrypted TEXT,
+    model TEXT NOT NULL,
+    cost_per_1k_tokens NUMERIC DEFAULT 0,
+    budget_cap NUMERIC DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(organization_id, name)
+);
+
+ALTER TABLE ai_providers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins can manage AI providers" ON ai_providers FOR ALL USING (
+    organization_id = get_my_org_id() AND
+    get_user_org_role(organization_id) IN ('admin', 'super_admin')
+);
+CREATE POLICY "Members can view active providers" ON ai_providers FOR SELECT USING (
+    organization_id = get_my_org_id()
+);
+
+-- 2. Prompt Templates
+CREATE TABLE IF NOT EXISTS prompt_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    name TEXT NOT NULL, -- e.g., 'PRD_GENERATION', 'DAILY_SUMMARY'
+    system_prompt TEXT NOT NULL,
+    user_prompt_template TEXT NOT NULL, -- Contains {{variables}}
+    input_schema JSONB,
+    output_schema JSONB,
+    version INTEGER DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(organization_id, name, version)
+);
+
+ALTER TABLE prompt_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can view prompt templates" ON prompt_templates FOR SELECT USING (
+    organization_id = get_my_org_id()
+);
+CREATE POLICY "Admins can manage prompt templates" ON prompt_templates FOR ALL USING (
+    organization_id = get_my_org_id() AND
+    get_user_org_role(organization_id) IN ('admin', 'super_admin')
+);
+
+-- 3. AI Request Logs (Audit Trail)
+CREATE TABLE IF NOT EXISTS ai_request_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID, -- auth.users.id
+    provider_id UUID REFERENCES ai_providers(id) ON DELETE SET NULL,
+    template_name TEXT,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    total_cost NUMERIC DEFAULT 0,
+    response_time_ms INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE ai_request_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view their own AI logs" ON ai_request_logs FOR SELECT USING (
+    user_id = auth.uid() OR get_user_org_role(organization_id) IN ('admin', 'super_admin')
+);

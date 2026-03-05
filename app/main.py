@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.routes import documents, crds, tickets, graphrag, users, projects, search, collaborators
+from app.api.routes import integrations_clickup
 from app.core.config import settings
 
 from app.db.weaviate import init_weaviate_schema
@@ -57,6 +58,7 @@ app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["u
 app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", tags=["projects"])
 app.include_router(search.router, prefix=f"{settings.API_V1_STR}/search", tags=["search"])
 app.include_router(collaborators.router, prefix=f"{settings.API_V1_STR}/documents", tags=["collaborators"])
+app.include_router(integrations_clickup.router, prefix=f"{settings.API_V1_STR}/integrations/clickup", tags=["clickup"])
 
 @app.get(f"{settings.API_V1_STR}/test_weaviate")
 def test_weaviate_connection():
